@@ -439,6 +439,18 @@ policies and contribution forms [3].
         // necessary to wait until the onactivate event.
         on_event(self, "install",
                 function(event) {
+
+                    // The ServiceWorker specification allows user agents to
+                    // terminate service workers at any time there are no
+                    // active or pending event handlers. In order for this
+                    // class to function as designed, the same object must be
+                    // present in the runtime throughout the duration of the
+                    // test. Therefore, the `install` event must be explicitly
+                    // extended through the lifetime of the test.
+                    event.waitUntil(new Promise(function(resolve) {
+                        add_completion_callback(resolve);
+                    }));
+
                     this_obj.all_loaded = true;
                     if (this_obj.on_loaded_callback) {
                         this_obj.on_loaded_callback();
