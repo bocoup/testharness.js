@@ -412,6 +412,8 @@ policies and contribution forms [3].
         this.all_loaded = false;
         this.on_loaded_callback = null;
         var this_obj = this;
+        var releaseInstallHold = null;
+
         self.addEventListener("message",
                 function(event) {
                     if (event.data.type && event.data.type === "connect") {
@@ -441,19 +443,40 @@ policies and contribution forms [3].
                 function(event) {
 
                     // The ServiceWorker specification allows user agents to
-                    // terminate service workers at any time there are no
-                    // active or pending event handlers. In order for this
-                    // class to function as designed, the same object must be
-                    // present in the runtime throughout the duration of the
-                    // test. Therefore, the `install` event must be explicitly
-                    // extended through the lifetime of the test.
+                    // terminate idle service workers (i.e. workers that have
+                    // no active or pending event handlers) at any time. In
+                    // order for this class to function as designed, the same
+                    // object must be present in the runtime throughout the
+                    // duration of the test. The user agent can be discouraged
+                    // from terminating service workers if any event handlers
+                    // have been extended with an unsettled promise. While
+                    // extending the `install` lifecycle event in this way
+                    // would serve this end, it would also prevent transition
+                    // into subsequent phases, possibly interfering with the
+                    // behavior under test. The `message` event does not suffer
+                    // from this problem.
+                    //
+                    // By interleaving handlers for the two events, the service
+                    // worker can avoid entering an idle state without altering
+                    // the lifecycle.
                     event.waitUntil(new Promise(function(resolve) {
-                        add_completion_callback(resolve);
+                        releaseInstallHold = resolve;
+                        self.registration.installing.postMessage("wptReleaseInstallHold");
                     }));
 
                     this_obj.all_loaded = true;
                     if (this_obj.on_loaded_callback) {
                         this_obj.on_loaded_callback();
+                    }
+                });
+
+        on_event(self, "message",
+                function(event) {
+                    if (event.data === "wptReleaseInstallHold") {
+                        event.waitUntil(new Promise(function(resolve) {
+                            add_completion_callback(resolve);
+                        }));
+                        releaseInstallHold();
                     }
                 });
     }
