@@ -411,8 +411,9 @@ policies and contribution forms [3].
         WorkerTestEnvironment.call(this);
         this.all_loaded = false;
         this.on_loaded_callback = null;
-        var this_obj = this;
+        this.keep_alive_enabled = false;
         var releaseInstallHold = null;
+        var this_obj = this;
 
         self.addEventListener("message",
                 function(event) {
@@ -460,9 +461,18 @@ policies and contribution forms [3].
                     // By interleaving handlers for the two events, the service
                     // worker can avoid entering an idle state without altering
                     // expected lifecycle transitions.
-                    event.waitUntil(new Promise(function(resolve) {
-                        releaseHold = resolve;
-                    }));
+                    if (this_obj.keep_alive_enabled) {
+                        event.waitUntil(new Promise(function(resolve) {
+                            releaseHold = resolve;
+                        }));
+
+                        add_completion_callback(function() {
+                            if (typeof releaeHold === "function") {
+                                releaseHold();
+                                releaseHold = null;
+                            }
+                        });
+                    }
 
                     this_obj.all_loaded = true;
                     if (this_obj.on_loaded_callback) {
@@ -472,23 +482,27 @@ policies and contribution forms [3].
 
         on_event(self, "message",
                 function(event) {
-                    if (event.data === "testharness.js:releaseHold") {
+                    var data = event.data;
+                    if (event.data === "testharness.js:releaseHold" ||
+                        event.data === "testharness.js:refreshHold") {
+
+                        if (!this_obj.keep_alive_enabled) {
+                            throw new Error(
+                                    "Service Worker is not configured to be kept alive."
+                                );
+                        }
+
                         releaseHold();
                         releaseHold = null;
-                    } else if (event.data === "testharness.js:refreshHold") {
-                        releaseHold();
-                        event.waitUntil(new Promise(function(resolve) {
-                            releaseHold = resolve;
-                        }));
+
+                        if (event.data === "testharness.js:refreshHold") {
+                            event.waitUntil(new Promise(function(resolve) {
+                                releaseHold = resolve;
+                            }));
+                        }
                     }
                 });
 
-        add_completion_callback(function() {
-            if (typeof releaeHold === "function") {
-                releaseHold();
-                releaseHold = null;
-            }
-        });
     }
     ServiceWorkerTestEnvironment.prototype = Object.create(WorkerTestEnvironment.prototype);
 
@@ -498,6 +512,16 @@ policies and contribution forms [3].
         } else {
             this.on_loaded_callback = callback;
         }
+    };
+
+    ServiceWorkerTestEnvironment.prototype.keep_alive = function() {
+        if (this.all_loaded) {
+            throw new Error(
+                    "Service Worker `keep_alive` cannot be enabled following the`install` event."
+                );
+        }
+
+        this.keep_alive_enabled = true;
     };
 
     function create_test_environment() {
@@ -600,6 +624,33 @@ policies and contribution forms [3].
             assert_throws(expected, function() { throw e }, description);
         });
     }
+
+	/**
+	 * Configure the current Service Worker context to discourage being
+	 * terminated by the browser. By default, this will force the worker to
+	 * remain in the `install` lifecycle phase indefinitely. Clients wishing to
+	 * allow the worker to advance beyond this phase should send a message to
+	 * the worker using the `postMessage` API with one of the two string values
+	 * as data:
+	 *
+	 * - "testharness.js:refreshHold" - continue to keep alive, but allow the
+	 *                                  worker to transition to subsequent
+	 *                                  lifecycle phases
+	 * - "testharness.js:releaseHold" - discontinue keep alive behavior
+	 *
+	 * In tests where this behavior is desired, this method must be called upon
+	 * initial evaluation and prior to the `install` lifecycle event.
+	 */
+    function sw_keep_alive() {
+        if (!(test_environment instanceof ServiceWorkerTestEnvironment)) {
+            throw new Error(
+                    "This function is intended for use in Service Worker contexts only"
+                );
+        }
+
+        test_environment.keep_alive();
+    }
+    expose(sw_keep_alive, "sw_keep_alive");
 
     /**
      * This constructor helper allows DOM events to be handled using Promises,
