@@ -454,14 +454,14 @@ policies and contribution forms [3].
                     // would serve this end, it would also prevent transition
                     // into subsequent phases, possibly interfering with the
                     // behavior under test. The `message` event does not suffer
-                    // from this problem.
+                    // from this problem, so a lifecycle-independent hold can
+                    // be created in response to a message from the client.
                     //
                     // By interleaving handlers for the two events, the service
                     // worker can avoid entering an idle state without altering
-                    // its own lifecycle.
+                    // expected lifecycle transitions.
                     event.waitUntil(new Promise(function(resolve) {
-                        releaseInstallHold = resolve;
-                        self.registration.installing.postMessage("testharness.js:releaseInstallHold");
+                        releaseHold = resolve;
                     }));
 
                     this_obj.all_loaded = true;
@@ -472,13 +472,23 @@ policies and contribution forms [3].
 
         on_event(self, "message",
                 function(event) {
-                    if (event.data === "testharness.js:releaseInstallHold") {
+                    if (event.data === "testharness.js:releaseHold") {
+                        releaseHold();
+                        releaseHold = null;
+                    } else if (event.data === "testharness.js:refreshHold") {
+                        releaseHold();
                         event.waitUntil(new Promise(function(resolve) {
-                            add_completion_callback(resolve);
+                            releaseHold = resolve;
                         }));
-                        releaseInstallHold();
                     }
                 });
+
+        add_completion_callback(function() {
+            if (typeof releaeHold === "function") {
+                releaseHold();
+                releaseHold = null;
+            }
+        });
     }
     ServiceWorkerTestEnvironment.prototype = Object.create(WorkerTestEnvironment.prototype);
 
