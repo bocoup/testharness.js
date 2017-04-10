@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <script>
+function runTest(url, id, done) {
+  var child;
+
+  function onMessage(event) {
+	var actual, expectedEl, expected;
+
+	if (!event.data || event.data.type !== 'complete') {
+      return;
+	}
+	try {
+      window.removeEventListener('message', onMessage);
+
+	  actual = event.data;
+	  expectedEl = child.document.getElementById('expected');
+	  expected = JSON.parse(expectedEl.innerText || expectedEl.textContent);
+
+	  child.close();
+	} finally {
+	  done({ actual: actual, expected: expected });
+	}
+  }
+  window.addEventListener('message', onMessage);
+
+  window.child = child = window.open(url, id);
+}
+	</script>
+  </body>
+</html>
+
