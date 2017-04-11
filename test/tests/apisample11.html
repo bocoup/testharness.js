@@ -96,4 +96,31 @@ function start_test_in_iframe() {
 
 <div id="target">
 </div>
+<script type="text/json" id="expected">
+{
+  "status": {
+    "status": 0,
+    "OK": 0,
+    "TIMEOUT": 2,
+    "ERROR": 1,
+    "message": null,
+    "stack": null
+  },
+  "tests": [
+    {
+      "status": 0,
+      "index": 1,
+      "name": "Example with iframe that notifies containing document via callbacks",
+      "properties": {},
+      "TIMEOUT": 2,
+      "PASS": 0,
+      "FAIL": 1,
+      "message": null,
+      "NOTRUN": 3,
+      "stack": null
+    }
+  ],
+  "type": "complete"
+}
+</script>
 </body>
