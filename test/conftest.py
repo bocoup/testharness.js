@@ -6,8 +6,12 @@ import html5lib
 import pytest
 from selenium import webdriver
 
+from wptserver import WPTServer
+
 _ENC = 'utf8'
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_WPT_ROOT = os.path.normpath(os.path.join(_HERE, '..', '..'))
+_HARNESS = os.path.join(_HERE, 'harness.html')
 
 def pytest_collect_file(path, parent):
     if path.ext.lower() == '.html':
@@ -15,11 +19,15 @@ def pytest_collect_file(path, parent):
 
 def pytest_configure(config):
     config.driver = webdriver.Firefox()
+    config.server = WPTServer(_WPT_ROOT)
+    config.server.start()
+    config.add_cleanup(lambda: config.server.stop())
     config.add_cleanup(lambda: config.driver.quit())
 
 class HTMLItem(pytest.Item, pytest.Collector):
-    def __init__(self, fspath, parent):
-        with io.open(fspath, encoding=_ENC) as f:
+    def __init__(self, filename, parent):
+        self.filename = filename
+        with io.open(filename, encoding=_ENC) as f:
             markup = f.read()
 
         parsed = html5lib.parse(markup, namespaceHTMLElements=False)
@@ -35,26 +43,24 @@ class HTMLItem(pytest.Item, pytest.Collector):
                 continue
 
         super(HTMLItem, self).__init__(name, parent)
-        self.fspath = fspath
 
     def repr_failure(self, excinfo):
         return pytest.Collector.repr_failure(self, excinfo)
 
     def runtest(self):
         driver = self.session.config.driver
+        server = self.session.config.server
 
-        driver.get('file://' + _HERE + '/harness.html')
+        driver.get(server.url(_HARNESS))
 
         if self.expected is None:
             raise Exception('Expected value not declared')
         expected = json.loads(self.expected)
 
-        actual = driver.execute_async_script('runTest("%s", "foo", arguments[0])' % self.fspath)
+        actual = driver.execute_async_script('runTest("%s", "foo", arguments[0])' % server.url(str(self.filename)))
 
         actual["status"] = self._scrub_stack(actual["status"])
         actual["tests"] = map(self._scrub_stack, actual["tests"])
-
-        print json.dumps(actual, indent=2)
 
         assert actual == expected
 
@@ -64,7 +70,7 @@ class HTMLItem(pytest.Item, pytest.Collector):
 
         assert "stack" in obj
 
-        if isinstance(obj["stack"], basestring):
+        if obj["stack"] is not None:
             copy["stack"] = "(implementation-defined)"
 
         return copy

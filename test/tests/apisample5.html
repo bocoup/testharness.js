@@ -14,5 +14,32 @@ var t = async_test("setup({allow_uncaught_exception:true}) should allow tests to
 onerror = t.step_func(function() {t.done()});
 throw new Error("Example Error");
 </script>
+<script type="text/json" id="expected">
+{
+  "status": {
+    "status": 0,
+    "OK": 0,
+    "TIMEOUT": 2,
+    "ERROR": 1,
+    "message": null,
+    "stack": null
+  },
+  "tests": [
+    {
+      "status": 0,
+      "index": 1,
+      "name": "setup({allow_uncaught_exception:true}) should allow tests to pass even if there is an exception",
+      "properties": {},
+      "TIMEOUT": 2,
+      "PASS": 0,
+      "FAIL": 1,
+      "message": null,
+      "NOTRUN": 3,
+      "stack": null
+    }
+  ],
+  "type": "complete"
+}
+</script>
 </body>
 </html>
